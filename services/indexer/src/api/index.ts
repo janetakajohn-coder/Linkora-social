@@ -18,6 +18,7 @@ import { createGovernanceRouter } from "./routes/governance";
 import { createTipsRouter } from "./routes/tips";
 import { createUsersRouter } from "./routes/users";
 import { createFeedRouter } from "./routes/feed";
+import { createReputationRouter } from "./routes/reputation";
 import { createSearchRouter } from "./routes/search";
 import { MediaUploadConfig } from "../config";
 import { isFenced } from "../gossip";
@@ -30,6 +31,7 @@ import {
 import { PostgresDatabase } from "../postgres-db";
 import { HealthMonitor } from "../services/health-monitor";
 import { metricsText } from "../metrics";
+import { createWebhooksRouter, WebhookDispatcher } from "../webhooks";
 
 let warnedMissingAllowedOrigins = false;
 
@@ -85,7 +87,8 @@ export function createApp(
   pg?: PgPool,
   healthMonitor?: HealthMonitor,
   shutdownState?: { active: boolean },
-  mediaUpload?: MediaUploadConfig
+  mediaUpload?: MediaUploadConfig,
+  webhookDispatcher?: WebhookDispatcher
 ): express.Application {
   const app = express();
   app.use(helmet());
@@ -199,7 +202,7 @@ export function createApp(
     next();
   });
 
-  app.use("/api/profiles", createProfilesRouter(db));
+  app.use("/api/profiles", createProfilesRouter(db, queryCache));
   app.use("/api/posts", createPostsRouter(db, mediaUpload));
   app.use("/api/search", createSearchRouter(db));
   app.use("/api/follows", createFollowsRouter(db));
@@ -208,6 +211,9 @@ export function createApp(
   app.use("/api/tips", createTipsRouter(db));
   app.use("/api/users", createUsersRouter(db));
   app.use("/api/feed", createFeedRouter(pg ?? db));
+  if (webhookDispatcher) {
+    app.use("/api/webhooks", createWebhooksRouter(webhookDispatcher));
+  }
 
   const notificationService = pg
     ? new NotificationService({ deviceTokenStore: new PostgresDeviceTokenStore(pg) })
